@@ -98,18 +98,31 @@ MAGIC_SELF_IP = 'self'
 
 
 class MockRedis(object):
-  """A mock-redis object for quick tests."""
+  """A mock-redis object for quick offline tests."""
   def __init__(self, host=None, port=None, password=None):
     self.data = {}
   def ping(self): return True 
+  def get(self, key):
+    if key in self.data: return self.data[key]
+    return None
+  def set(self, key, val):
+    self.data[key] = val
+  def setnx(self, key, val):
+    if key in self.data: return None
+    self.data[key] = val
+    return val
+  def incr(self, key):
+    if key not in self.data: self.data[key] = 0
+    self.data[key] += 1
+    return self.data[key]
+  def delete(self, key):
+    if key in self.data: del(self.data[key])
   def hget(self, key, hkey):
     if key in self.data and hkey in self.data[key]: return self.data[key][hkey]
     return None
   def hgetall(self, key):
     if key in self.data: return self.data[key]
     return {}
-  def delete(self, key):
-    if key in self.data: del(self.data[key])
   def hdel(self, key, hkey):
     if key in self.data and hkey in self.data[key]: del(self.data[key][hkey])
   def hset(self, key, hkey, val):
