@@ -81,11 +81,11 @@ import getopt
 import redis
 import socket
 
-OPT_COMMON_FLAGS = 'A:R:'
-OPT_COMMON_ARGS = ['auth=', 'redis=']
-OPT_FLAGS = 'PD:r:d:kqa:z'
+OPT_COMMON_FLAGS = 'A:R:z'
+OPT_COMMON_ARGS = ['auth=', 'redis=', 'reset']
+OPT_FLAGS = 'PD:r:d:kqa:'
 OPT_ARGS = ['pdnsbe', 'domain', 'record', 'data', 'kill', 'delete', 'query',
-            'add', 'reset']
+            'add']
 
 VALID_RECORDS = ['A', 'NS', 'MX', 'CNAME', 'SOA', 'TXT']
 TTL_SUFFIXES = {
@@ -351,6 +351,10 @@ class PdnsRedis(object):
       if opt in ('-A', '--auth'):
         self.redis_pass = self.GetPass(arg)        
 
+      if opt in ('-z', '--reset'):
+        self.q_record, self.q_data = None, None
+        self.tasks = []
+
     return opts, args
 
   def ParseArgs(self, argv):
@@ -375,9 +379,6 @@ class PdnsRedis(object):
 
       if opt in ('-P', '--pdnsbe'):
         self.tasks.append(PdnsChatter(sys.stdin, sys.stdout, self))
-
-      if opt in ('-z', '--reset'):
-        self.q_record, self.q_data = None, None
 
     return self
 
