@@ -35,6 +35,7 @@ Flags:
   -D <domain>        Select a domain for --query or --set.
   -r <record-type>   Choose which record to modify/query/delete.
   -d <data>          Data we are looking for or adding.
+  -z                 Reset record and data.
   -q                 Query.
   -k                 Kill (delete).
   -A <ttl>           Add using a given TTL (requires -r and -d).  The TTL
@@ -82,8 +83,9 @@ import socket
 
 OPT_COMMON_FLAGS = 'A:R:'
 OPT_COMMON_ARGS = ['auth=', 'redis=']
-OPT_FLAGS = 'PD:r:d:kqa:'
-OPT_ARGS = ['pdnsbe', 'domain', 'record', 'data', 'kill', 'delete', 'query', 'add']
+OPT_FLAGS = 'PD:r:d:kqa:z'
+OPT_ARGS = ['pdnsbe', 'domain', 'record', 'data', 'kill', 'delete', 'query',
+            'add', 'reset']
 
 VALID_RECORDS = ['A', 'NS', 'MX', 'CNAME', 'SOA', 'TXT']
 TTL_SUFFIXES = {
@@ -93,6 +95,26 @@ TTL_SUFFIXES = {
   'W': 60*60*24*7,
 }
 MAGIC_SELF_IP = 'self'
+
+
+class MockRedis(object):
+  """A mock-redis object for quick tests."""
+  def __init__(self, host=None, port=None, password=None):
+    self.data = {}
+  def ping(self): return True 
+  def hget(self, key, hkey):
+    if key in self.data and hkey in self.data[key]: return self.data[key][hkey]
+    return None
+  def hgetall(self, key):
+    if key in self.data: return self.data[key]
+    return {}
+  def delete(self, key):
+    if key in self.data: del(self.data[key])
+  def hdel(self, key, hkey):
+    if key in self.data and hkey in self.data[key]: del(self.data[key][hkey])
+  def hset(self, key, hkey, val):
+    if key not in self.data: self.data[key] = {}
+    self.data[key][hkey] = val
 
 
 class Error(Exception):
@@ -341,13 +363,19 @@ class PdnsRedis(object):
       if opt in ('-P', '--pdnsbe'):
         self.tasks.append(PdnsChatter(sys.stdin, sys.stdout, self))
 
+      if opt in ('-z', '--reset'):
+        self.q_record, self.q_data = None, None
+
     return self
 
   def BE(self):
     if not self.be:
-      self.be = redis.Redis(host=self.redis_host,
-                            port=int(self.redis_port),
-                            password=self.redis_pass)
+      if self.redis_host == 'mock':
+        self.be = MockRedis()
+      else:
+        self.be = redis.Redis(host=self.redis_host,
+                              port=int(self.redis_port),
+                              password=self.redis_pass)
       self.be.ping()
     return self.be
 
