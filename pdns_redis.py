@@ -161,16 +161,20 @@ class QueryOp(Task):
     self.data = data
 
   def Query(self):
+    pdns_be = self.redis_pdns.BE()
+    pdns_key = 'pdns.'+self.domain
+
     if self.record and self.data:
       key = "\t".join([self.record, self.data])
-      ttl = self.redis_pdns.BE().hget('pdns.'+self.domain, key)
+      ttl = pdns_be.hget(pdns_key, key)
       if ttl is not None:
+        pdns_be.hincrby(pdns_key, 'TXT\tQC', 1)
         return [(self.domain, self.record, ttl, self.data)]
       else:
         return []
 
     rv = []
-    ddata = self.redis_pdns.BE().hgetall('pdns.'+self.domain)
+    ddata = pdns_be.hgetall(pdns_key)
 
     if self.record:
       for entry in ddata:
@@ -189,6 +193,7 @@ class QueryOp(Task):
         record, data = entry.split("\t", 1)
         rv.append((self.domain, record, ddata[entry], data))
 
+    if rv: pdns_be.hincrby(pdns_key, 'TXT\tQC', 1)
     return rv
 
   def Run(self):
@@ -310,7 +315,7 @@ class PdnsChatter(Task):
     while 1:
       line = self.readline() 
       query = line.split("\t")
-      self.reply("LOG\tPowerDNS sent: %s" % query)
+#     self.reply("LOG\tPowerDNS sent: %s" % query)
       if len(query) == 7:
         self.Lookup(query)  
       else:
