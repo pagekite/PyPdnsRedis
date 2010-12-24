@@ -115,6 +115,10 @@ class MockRedis(object):
     if key not in self.data: self.data[key] = 0
     self.data[key] += 1
     return self.data[key]
+  def incrby(self, key, val):
+    if key not in self.data: self.data[key] = 0
+    self.data[key] += val
+    return self.data[key]
   def delete(self, key):
     if key in self.data: del(self.data[key])
   def hget(self, key, hkey):
