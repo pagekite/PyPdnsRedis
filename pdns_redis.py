@@ -124,6 +124,11 @@ class MockRedis(object):
   def hget(self, key, hkey):
     if key in self.data and hkey in self.data[key]: return self.data[key][hkey]
     return None
+  def hincrby(self, key, hkey, val):
+    if key not in self.data: self.data[key] = {}
+    if hkey not in self.data[key]: self.data[key][hkey] = 0
+    self.data[key][hkey] += val
+    return self.data[key][hkey]
   def hgetall(self, key):
     if key in self.data: return self.data[key]
     return {}
@@ -318,12 +323,16 @@ class PdnsChatter(Task):
 
     while 1:
       line = self.readline() 
-      query = line.split("\t")
-#     self.reply("LOG\tPowerDNS sent: %s" % query)
-      if len(query) == 7:
-        self.Lookup(query)  
-      else:
-        self.reply("LOG\tPowerDNS sent bad request: %s" % query)
+      try:
+        query = line.split("\t")
+#       self.reply("LOG\tPowerDNS sent: %s" % query)
+        if len(query) == 7:
+          self.Lookup(query)  
+        else:
+          self.reply("LOG\tPowerDNS sent bad request: %s" % query)
+          self.reply("FAIL")
+      except ValueError, verr:
+        self.reply("LOG\tInternal ValueError: %s" % verr)
         self.reply("FAIL")
 
 
