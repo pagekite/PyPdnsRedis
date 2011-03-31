@@ -139,6 +139,12 @@ class MockRedis(object):
   def hset(self, key, hkey, val):
     if key not in self.data: self.data[key] = {}
     self.data[key][hkey] = val
+  def sadd(self, key, member):
+    if key not in self.data: self.data[key] = {}
+    self.data[key][member] = 1
+  def srem(self, key, member):
+    if key in self.data and member in self.data[key]:
+      del self.data[key][member]
 
 
 class Error(Exception):
