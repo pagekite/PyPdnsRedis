@@ -98,6 +98,8 @@ TTL_SUFFIXES = {
 }
 MAGIC_SELF_IP = 'self'
 
+REDIS_PREFIX = 'pdns.'
+
 
 class MockRedis(object):
   """A mock-redis object for quick offline tests."""
@@ -179,7 +181,7 @@ class QueryOp(Task):
 
   def Query(self):
     pdns_be = self.redis_pdns.BE()
-    pdns_key = 'pdns.'+self.domain
+    pdns_key = REDIS_PREFIX+self.domain
 
     if self.record and self.data:
       key = "\t".join([self.record, self.data])
@@ -222,16 +224,16 @@ class DeleteOp(QueryOp):
 
   def Run(self):
     if not self.record and not self.data:
-      self.redis_pdns.BE().delete('pdns.'+self.domain) 
+      self.redis_pdns.BE().delete(REDIS_PREFIX+self.domain)
       return 'Deleted all records for %s.' % self.domain
 
     deleted = 0
     if self.record and self.data:
-      deleted += self.redis_pdns.BE().hdel('pdns.'+self.domain,
+      deleted += self.redis_pdns.BE().hdel(REDIS_PREFIX+self.domain,
                                          "\t".join([self.record, self.data]))
     else:
       for record in self.Query():
-        deleted += self.redis_pdns.BE().hdel('pdns.'+self.domain,
+        deleted += self.redis_pdns.BE().hdel(REDIS_PREFIX+self.domain,
                                            "\t".join([record[1], record[3]]))
       
     return 'Deleted %d records from %s.' % (deleted, self.domain)
@@ -255,7 +257,7 @@ class AddOp(QueryOp):
       self.ttl = str(int(ttl))
 
   def Run(self):
-    self.redis_pdns.BE().hset('pdns.'+self.domain, 
+    self.redis_pdns.BE().hset(REDIS_PREFIX+self.domain,
                               "\t".join([self.record, self.data]), self.ttl)
     return 'Added %s record to %s.' % (self.record, self.domain)
 
