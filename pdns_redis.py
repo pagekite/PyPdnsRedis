@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# 
+#
 # pdns-redis.py, Copyright 2011, Bjarni R. Einarsson <http://bre.klaki.net/>
 #                                and The Beanstalks Project ehf.
 #
@@ -41,7 +41,7 @@ Flags:
   -q                 Query.
   -k                 Kill (delete).
   -A <ttl>           Add using a given TTL (requires -r and -d).  The TTL
-                     may be 
+                     may be
 
 WARNING: This program does NOTHING to ensure the records you create are valid
          according to the DNS spec.  Use at your own risk!
@@ -57,7 +57,7 @@ Examples:
 
   # Configure an A and two MX records for domain.com.
   pdns-redis.py -R localhost:9076 -D domain.com \\
-                -r A -d 1.2.3.4 -a 5M \\ 
+                -r A -d 1.2.3.4 -a 5M \\
                 -r MX -d '10 mx1.domain.com.' -a 1D \\
                       -d '20 mx2.domain.com.' -a 1D
 
@@ -68,7 +68,7 @@ Examples:
   pdns-redis.py -R localhost:9076 -D domain.com -d '20 mx2.domain.com.' -k
 
   # Make self.domain.com return the IP of the DNS server
-  pdns-redis.py -R localhost:9076 -D self.domain.com -r A -d self -a 5M 
+  pdns-redis.py -R localhost:9076 -D self.domain.com -r A -d self -a 5M
 
   # Delete domain.com completely
   pdns-redis.py -R localhost:9076 -D bar.domain.com -k
@@ -105,7 +105,7 @@ class MockRedis(object):
   """A mock-redis object for quick offline tests."""
   def __init__(self, host=None, port=None, password=None):
     self.data = {}
-  def ping(self): return True 
+  def ping(self): return True
   def get(self, key):
     if key in self.data: return self.data[key]
     return None
@@ -206,7 +206,7 @@ class QueryOp(Task):
         record, data = entry.split("\t", 1)
         if data == self.data:
           rv.append((self.domain, record, ddata[entry], data))
-    
+
     else:
       for entry in ddata:
         record, data = entry.split("\t", 1)
@@ -301,7 +301,7 @@ class PdnsChatter(Task):
       self.local_ip = local_ip
 
     if self.local_ip == '0.0.0.0':
-      self.local_ip = socket.getaddrinfo(socket.gethostname(), None)[0][4][0]       
+      self.local_ip = socket.getaddrinfo(socket.gethostname(), None)[0][4][0]
     if pdns_qtype == 'Q':
       if not domain:
         records = []
@@ -332,12 +332,12 @@ class PdnsChatter(Task):
       self.reply('OK\t%s' % BANNER)
 
     while 1:
-      line = self.readline() 
+      line = self.readline()
       try:
         query = line.split("\t")
 #       self.reply("LOG\tPowerDNS sent: %s" % query)
         if len(query) == 7:
-          self.Lookup(query)  
+          self.Lookup(query)
         else:
           self.reply("LOG\tPowerDNS sent bad request: %s" % query)
           self.reply("FAIL")
@@ -435,6 +435,6 @@ if __name__ == '__main__':
     pr = PdnsRedis().ParseArgs(sys.argv[1:]).RunTasks()
   except ArgumentError, e:
     print DOC
-    print 'Error: %s' % e 
+    print 'Error: %s' % e
     sys.exit(1)
 
