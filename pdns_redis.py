@@ -26,14 +26,15 @@ Redis database.  It also includes basic CLI functionality for querying, setting
 and deleting DNS records in Redis.
 
 Usage: pdns-redis.py [-R <host:port>] [-A <password-file>] [-P]
-       pdns-redis.py [-R <host:port>] [-A <password-file>] 
-                     [-D <domain>] [-r <type>] [-d <data>] [-k] [-q] [-a <ttl>] 
+       pdns-redis.py [-R <host:port>] [-A <password-file>]
+                     [-D <domain>] [-r <type>] [-d <data>] [-k] [-q] [-a <ttl>]
 
 Flags:
 
   -R <host:port>     Set the Redis back-end.
+  -W <host:port>     Set the Redis back-end for writes.
   -A <password-file> Read a Redis password from the named file.
-  -P                 Run as a PowerDNS pipe-backend. 
+  -P                 Run as a PowerDNS pipe-backend.
   -D <domain>        Select a domain for --query or --set.
   -r <record-type>   Choose which record to modify/query/delete.
   -d <data>          Data we are looking for or adding.
@@ -83,8 +84,8 @@ import getopt
 import redis
 import socket
 
-OPT_COMMON_FLAGS = 'A:R:z'
-OPT_COMMON_ARGS = ['auth=', 'redis=', 'reset']
+OPT_COMMON_FLAGS = 'A:R:W:z'
+OPT_COMMON_ARGS = ['auth=', 'redis=', 'redis_write=', 'reset']
 OPT_FLAGS = 'PD:r:d:kqa:'
 OPT_ARGS = ['pdnsbe', 'domain', 'record', 'data', 'kill', 'delete', 'query',
             'add']
@@ -179,8 +180,11 @@ class QueryOp(Task):
     self.record = record and record.upper() or None
     self.data = data
 
+  def BE(self):
+    return self.redis_pdns.BE()
+
   def Query(self):
-    pdns_be = self.redis_pdns.BE()
+    pdns_be = self.BE()
     pdns_key = REDIS_PREFIX+self.domain
 
     if self.record and self.data:
@@ -219,27 +223,32 @@ class QueryOp(Task):
     return self.Query()
 
 
-class DeleteOp(QueryOp):
+class WriteOp(QueryOp):
+  def BE(self):
+    return self.redis_pdns.WBE()
+
+
+class DeleteOp(WriteOp):
   """This object will delete records from Redis."""
 
   def Run(self):
     if not self.record and not self.data:
-      self.redis_pdns.BE().delete(REDIS_PREFIX+self.domain)
+      self.BE().delete(REDIS_PREFIX+self.domain)
       return 'Deleted all records for %s.' % self.domain
 
     deleted = 0
     if self.record and self.data:
-      deleted += self.redis_pdns.BE().hdel(REDIS_PREFIX+self.domain,
-                                         "\t".join([self.record, self.data]))
+      deleted += self.BE().hdel(REDIS_PREFIX+self.domain,
+                                "\t".join([self.record, self.data]))
     else:
       for record in self.Query():
-        deleted += self.redis_pdns.BE().hdel(REDIS_PREFIX+self.domain,
-                                           "\t".join([record[1], record[3]]))
-      
+        deleted += self.BE().hdel(REDIS_PREFIX+self.domain,
+                                  "\t".join([record[1], record[3]]))
+
     return 'Deleted %d records from %s.' % (deleted, self.domain)
 
 
-class AddOp(QueryOp):
+class AddOp(WriteOp):
   """This object will add a record to Redis."""
 
   def __init__(self, redis_pdns, domain, record, data, ttl):
@@ -257,8 +266,8 @@ class AddOp(QueryOp):
       self.ttl = str(int(ttl))
 
   def Run(self):
-    self.redis_pdns.BE().hset(REDIS_PREFIX+self.domain,
-                              "\t".join([self.record, self.data]), self.ttl)
+    self.BE().hset(REDIS_PREFIX+self.domain,
+                   "\t".join([self.record, self.data]), self.ttl)
     return 'Added %s record to %s.' % (self.record, self.domain)
 
 
@@ -353,16 +362,19 @@ class PdnsRedis(object):
     self.redis_host = None
     self.redis_port = None
     self.redis_pass = None
+    self.redis_write_host = None
+    self.redis_write_port = None
     self.be = None
+    self.wbe = None
     self.q_domain = None
     self.q_record = None
     self.q_data = None
     self.tasks = []
 
   def GetPass(self, filename):
-    f = open(filename) 
+    f = open(filename)
     for line in f.readlines():
-      if line.startswith('requirepass') or line.startswith('pass'): 
+      if line.startswith('requirepass') or line.startswith('pass'):
         rp, password = line.strip().split(' ', 1)
         return password
     return None
@@ -376,8 +388,11 @@ class PdnsRedis(object):
       if opt in ('-R', '--redis'):
         self.redis_host, self.redis_port = arg.split(':')
 
+      if opt in ('-W', '--redis_write'):
+        self.redis_write_host, self.redis_write_port = arg.split(':')
+
       if opt in ('-A', '--auth'):
-        self.redis_pass = self.GetPass(arg)        
+        self.redis_pass = self.GetPass(arg)
 
       if opt in ('-z', '--reset'):
         self.q_record, self.q_data = None, None
@@ -420,6 +435,19 @@ class PdnsRedis(object):
                               password=self.redis_pass)
       self.be.ping()
     return self.be
+
+  def WBE(self):
+    if not self.redis_write_host: return self.BE()
+    if not self.wbe:
+      if self.redis_write_host == 'mock':
+        self.wbe = MockRedis()
+      else:
+        self.wbe = redis.Redis(host=self.redis_write_host,
+                               port=int(self.redis_write_port),
+                               password=self.redis_pass)
+      self.wbe.ping()
+    return self.wbe
+
 
   def RunTasks(self):
     if not self.tasks:
