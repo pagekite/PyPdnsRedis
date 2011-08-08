@@ -79,10 +79,13 @@ Examples:
 
 """
 
-import sys
 import getopt
 import redis
 import socket
+import sys
+import syslog
+
+DEBUG = False
 
 OPT_COMMON_FLAGS = 'A:R:W:z'
 OPT_COMMON_ARGS = ['auth=', 'redis=', 'redis_write=', 'reset']
@@ -279,6 +282,9 @@ class PdnsChatter(Task):
     self.outfile = outfile
     self.redis_pdns = redis_pdns
     self.local_ip = None
+    syslog.openlog((sys.argv[0] or 'pdns_redis.py').split('/')[-1],
+                    syslog.LOG_PID, syslog.LOG_DAEMON)
+
 
   def reply(self, text):
     self.outfile.write(text)
@@ -286,13 +292,17 @@ class PdnsChatter(Task):
     self.outfile.flush()
 
   def readline(self):
-    return self.infile.readline().strip()
+    line = self.infile.readline()
+    if len(line) == 0: raise IOError('EOF')
+    return line.strip()
 
   def SendMxOrSrv(self, d1, d2, d3, d4):
     self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (d1, d2, d3, d4))
 
   def SendRecord(self, record):
     if record[3] == MAGIC_SELF_IP:
+      if not self.local_ip:
+        raise ValueError("Local IP address is unknown")
       self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (record[0], record[1],
                                                    record[2], self.local_ip))
     else:
@@ -306,11 +316,16 @@ class PdnsChatter(Task):
 
   def Lookup(self, query):
     (pdns_qtype, domain, qclass, rtype, _id, remote_ip, local_ip) = query
+
     if not self.local_ip:
       self.local_ip = local_ip
 
     if self.local_ip == '0.0.0.0':
-      self.local_ip = socket.getaddrinfo(socket.gethostname(), None)[0][4][0]
+      try:
+        self.local_ip = socket.getaddrinfo(socket.gethostname(), None)[0][4][0]
+      except:
+        pass
+
     if pdns_qtype == 'Q':
       if not domain:
         records = []
@@ -344,14 +359,14 @@ class PdnsChatter(Task):
       line = self.readline()
       try:
         query = line.split("\t")
-#       self.reply("LOG\tPowerDNS sent: %s" % query)
+        if DEBUG: syslog.syslog(syslog.LOG_DEBUG, 'Q: %s' % query)
         if len(query) == 7:
           self.Lookup(query)
         else:
           self.reply("LOG\tPowerDNS sent bad request: %s" % query)
           self.reply("FAIL")
-      except ValueError, verr:
-        self.reply("LOG\tInternal ValueError: %s" % verr)
+      except Exception, err:
+        self.reply("LOG\tInternal Error: %s" % err)
         self.reply("FAIL")
 
 
