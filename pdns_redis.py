@@ -84,6 +84,8 @@ import redis
 import socket
 import sys
 import syslog
+import time
+import urllib
 
 DEBUG = False
 
@@ -101,6 +103,7 @@ TTL_SUFFIXES = {
   'W': 60*60*24*7,
 }
 MAGIC_SELF_IP = 'self'
+MAGIC_TEST_VALIDITY = 60 # seconds
 
 REDIS_PREFIX = 'pdns.'
 
@@ -282,6 +285,7 @@ class PdnsChatter(Task):
     self.outfile = outfile
     self.redis_pdns = redis_pdns
     self.local_ip = None
+    self.magic_tests = {}
     syslog.openlog((sys.argv[0] or 'pdns_redis.py').split('/')[-1],
                     syslog.LOG_PID, syslog.LOG_DAEMON)
 
@@ -299,8 +303,28 @@ class PdnsChatter(Task):
   def SendMxOrSrv(self, d1, d2, d3, d4):
     self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (d1, d2, d3, d4))
 
+  def MagicTest(self, want, url, now=None):
+    now = now or time.time()
+    result = self.magic_tests.get(url, {})
+
+    if result.get('time', 0) < (now - MAGIC_TEST_VALIDITY):
+      result['time'] = now
+      try:
+        tdata = ''.join(urllib.urlopen(url).readlines())
+        result['ok'] = tdata.startswith(want)
+      except:
+        result['ok'] = False
+
+    self.magic_tests[url] = result
+    if not result.get('ok', False):
+      raise ValueError('Failed self-test %s != %s' % (want, url))
+
   def SendRecord(self, record):
-    if record[3] == MAGIC_SELF_IP:
+    if record[3].startswith(MAGIC_SELF_IP):
+      if ':' in record[3]:
+        magic, test_want, test_url = record[3].split(':', 2)
+        self.MagicTest(want, test_url)
+
       if not self.local_ip:
         raise ValueError("Local IP address is unknown")
       self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (record[0], record[1],
