@@ -118,6 +118,7 @@ class MockRedis(object):
     return None
   def set(self, key, val):
     self.data[key] = val
+    return True
   def setnx(self, key, val):
     if key in self.data: return None
     self.data[key] = val
@@ -131,7 +132,11 @@ class MockRedis(object):
     self.data[key] += val
     return self.data[key]
   def delete(self, key):
-    if key in self.data: del(self.data[key])
+    if key in self.data:
+      del(self.data[key])
+      return True
+    else:
+      return False
   def hget(self, key, hkey):
     if key in self.data and hkey in self.data[key]: return self.data[key][hkey]
     return None
@@ -145,15 +150,20 @@ class MockRedis(object):
     return {}
   def hdel(self, key, hkey):
     if key in self.data and hkey in self.data[key]: del(self.data[key][hkey])
+    return True
   def hset(self, key, hkey, val):
     if key not in self.data: self.data[key] = {}
     self.data[key][hkey] = val
+    return True
   def sadd(self, key, member):
     if key not in self.data: self.data[key] = {}
     self.data[key][member] = 1
+    return True
   def srem(self, key, member):
     if key in self.data and member in self.data[key]:
       del self.data[key][member]
+      return True
+    return False
 
 
 class Error(Exception):
