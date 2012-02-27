@@ -116,21 +116,27 @@ class MockRedis(object):
   def get(self, key):
     if key in self.data: return self.data[key]
     return None
+  def encode(self, val):
+    if isinstance(val, str):
+      return val
+    if isinstance(val, unicode):
+      return val.encode('utf-8')
+    return str(val)
   def set(self, key, val):
-    self.data[key] = val
+    self.data[key] = self.encode(val)
     return True
   def setnx(self, key, val):
     if key in self.data: return None
-    self.data[key] = val
+    self.data[key] = self.encode(val)
     return val
   def incr(self, key):
     if key not in self.data: self.data[key] = 0
-    self.data[key] += 1
-    return self.data[key]
+    self.data[key] = self.encode(int(self.data[key])+1)
+    return int(self.data[key])
   def incrby(self, key, val):
     if key not in self.data: self.data[key] = 0
-    self.data[key] += val
-    return self.data[key]
+    self.data[key] = self.encode(int(self.data[key])+int(val))
+    return int(self.data[key])
   def delete(self, key):
     if key in self.data:
       del(self.data[key])
@@ -143,8 +149,8 @@ class MockRedis(object):
   def hincrby(self, key, hkey, val):
     if key not in self.data: self.data[key] = {}
     if hkey not in self.data[key]: self.data[key][hkey] = 0
-    self.data[key][hkey] += val
-    return self.data[key][hkey]
+    self.data[key][hkey] = self.encode(int(self.data[key][hkey])+int(val))
+    return int(self.data[key][hkey])
   def hgetall(self, key):
     if key in self.data: return self.data[key]
     return {}
@@ -153,7 +159,7 @@ class MockRedis(object):
     return True
   def hset(self, key, hkey, val):
     if key not in self.data: self.data[key] = {}
-    self.data[key][hkey] = val
+    self.data[key][hkey] = self.encode(val)
     return True
   def sadd(self, key, member):
     if key not in self.data: self.data[key] = {}
