@@ -354,17 +354,32 @@ class PdnsChatter(Task):
   def EndReply(self):
     self.reply('END')
 
+  def SetLocalIp(self, value):
+    if not (value == '0.0.0.0' or
+            value.startswith('127.') or
+            value.startswith('192.168.') or
+            value.startswith('10.')):
+      self.local_ip = value
+
+  def SlowGetOwnIp(self, target=('google.com', 80)):
+    try:
+      s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+      s.connect(target)
+      self.SetLocalIp(s.getsockname()[0])
+      s.close()
+    except:
+      pass
+
   def Lookup(self, query):
     (pdns_qtype, domain, qclass, rtype, _id, remote_ip, local_ip) = query
 
     if not self.local_ip:
-      self.local_ip = local_ip
-
-    if self.local_ip == '0.0.0.0':
-      try:
-        self.local_ip = socket.getaddrinfo(socket.gethostname(), None)[0][4][0]
-      except:
-        pass
+      self.SetLocalIp(local_ip)
+      if not self.local_ip:
+        try:
+          self.SetLocalIp(socket.getaddrinfo(socket.gethostname(), None)[0][4][0])
+        except:
+          pass
 
     if pdns_qtype == 'Q':
       if not domain:
@@ -394,6 +409,9 @@ class PdnsChatter(Task):
       sys.exit(1)
     else:
       self.reply('OK\t%s' % BANNER)
+
+    if not self.local_ip:
+      self.SlowGetOwnIp()
 
     while 1:
       line = self.readline()
