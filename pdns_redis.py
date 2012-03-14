@@ -41,7 +41,7 @@ Flags:
   -z                 Reset record and data.
   -q                 Query.
   -k                 Kill (delete).
-  -A <ttl>           Add using a given TTL (requires -r and -d).  The TTL
+  -a <ttl>           Add using a given TTL (requires -r and -d).  The TTL
                      may be
 
 WARNING: This program does NOTHING to ensure the records you create are valid
