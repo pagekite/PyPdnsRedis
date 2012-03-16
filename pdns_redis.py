@@ -52,9 +52,12 @@ WARNING: This program does NOTHING to ensure the records you create are valid
 Queries and kills (deletions) are filtered by -r and -d, if present.  If
 neither is specified, the entire domain is processed.
 
-Note that argumemnts are processed in order so multiple adds and deletes can
+Note that arguments are processed in order so multiple adds and deletes can
 be done at once, just by repeating the -D, -r, -d, -k and -a arguments, varying
 the data as you go along.
+
+Domain entries starting with a '*', for example *.foo.com, will be treated as
+wild-card entries by the PowerDNS pipe-backend, if the -w flag precedes -P.
 
 Examples:
 
