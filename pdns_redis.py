@@ -18,7 +18,7 @@
 #
 BANNER = "pdns-redis.py, by Bjarni R. Einarsson"
 DOC = """\
-pdns-redis.py is Copyright 2011, Bjarni R. Einarsson, http://bre.klaki.net/
+pdns-redis.py is Copyright 2012, Bjarni R. Einarsson, http://bre.klaki.net/
                                  and The Beanstalks Project ehf.
 
 This program implements a PowerDNS pipe-backend for looking up domain info in a
@@ -35,14 +35,16 @@ Flags:
   -W <host:port>     Set the Redis back-end for writes.
   -A <password-file> Read a Redis password from the named file.
   -P                 Run as a PowerDNS pipe-backend.
-  -D <domain>        Select a domain for --query or --set.
+  -w                 Enable wild-card lookups in PowerDNS pipe-backend.
+  -D <domain>        Select a domain for -q or -a.
   -r <record-type>   Choose which record to modify/query/delete.
   -d <data>          Data we are looking for or adding.
   -z                 Reset record and data.
   -q                 Query.
   -k                 Kill (delete).
   -a <ttl>           Add using a given TTL (requires -r and -d).  The TTL
-                     may be
+                     is in seconds, but may use a suffix of M, H, D or W
+                     for minutes, hours, days or weeks respectively.
 
 WARNING: This program does NOTHING to ensure the records you create are valid
          according to the DNS spec.  Use at your own risk!
@@ -76,6 +78,7 @@ Examples:
 
   # Chat with pdns-redis.py using the PowerDNS protocol
   pdns-redis.py -R localhost:9076 -P
+  pdns-redis.py -R localhost:9076 -w -P  # Now with wildcard domains!
 
 """
 
@@ -91,7 +94,7 @@ DEBUG = False
 
 OPT_COMMON_FLAGS = 'A:R:W:z'
 OPT_COMMON_ARGS = ['auth=', 'redis=', 'redis_write=', 'reset']
-OPT_FLAGS = 'PD:r:d:kqa:'
+OPT_FLAGS = 'PwD:r:d:kqa:'
 OPT_ARGS = ['pdnsbe', 'domain', 'record', 'data', 'kill', 'delete', 'query',
             'add']
 
@@ -315,13 +318,15 @@ class AddOp(WriteOp):
 class PdnsChatter(Task):
   """This object will chat with the pDNS server."""
 
-  def __init__(self, infile, outfile, redis_pdns, query_op=None):
+  def __init__(self, infile, outfile, redis_pdns,
+               query_op=None, wildcards=False):
     self.infile = infile
     self.outfile = outfile
     self.redis_pdns = redis_pdns
     self.local_ip = None
     self.magic_tests = {}
     self.qop = query_op or QueryOp
+    self.wildcards = wildcards
     syslog.openlog((sys.argv[0] or 'pdns_redis.py').split('/')[-1],
                     syslog.LOG_PID, syslog.LOG_DAEMON)
 
@@ -405,9 +410,11 @@ class PdnsChatter(Task):
       if not domain:
         records = []
       elif rtype == 'ANY':
-        records = self.qop(self.redis_pdns, domain).Query(wildcards=True)
+        records = self.qop(self.redis_pdns, domain
+                           ).Query(wildcards=self.wildcards)
       else:
-        records = self.qop(self.redis_pdns, domain, rtype).Query(wildcards=True)
+        records = self.qop(self.redis_pdns, domain, rtype
+                           ).Query(wildcards=self.wildcards)
 
       for record in records:
         if record[1] in ('MX', 'SRV'):
@@ -459,6 +466,7 @@ class PdnsRedis(object):
     self.redis_write_port = None
     self.be = None
     self.wbe = None
+    self.chat_wildcards = False
     self.q_domain = None
     self.q_record = None
     self.q_data = None
@@ -513,8 +521,12 @@ class PdnsRedis(object):
         self.tasks.append(AddOp(self,
                                 self.q_domain, self.q_record, self.q_data, arg))
 
+      if opt in ('-w', ):
+        self.chat_wildcards = True
+
       if opt in ('-P', '--pdnsbe'):
-        self.tasks.append(PdnsChatter(sys.stdin, sys.stdout, self))
+        self.tasks.append(PdnsChatter(sys.stdin, sys.stdout, self,
+                                      wildcards=self.chat_wildcards))
 
     return self
 
