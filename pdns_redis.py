@@ -205,9 +205,21 @@ class QueryOp(Task):
   def BE(self):
     return self.redis_pdns.BE()
 
-  def Query(self):
+  def DSplit(self, domain, count=1024):
+    return domain.split('.', count)
+
+  def WildQuery(self, domain):
+    try:
+      sub, dom = self.DSplit(domain, 1)
+      if sub == '*':
+        sub, dom = self.DSplit(dom, 1)
+      return self.Query(domain='*.%s' % dom)
+    except ValueError:
+      return []
+
+  def Query(self, domain=None, wildcards=False):
     pdns_be = self.BE()
-    pdns_key = REDIS_PREFIX+self.domain
+    pdns_key = REDIS_PREFIX+(domain or self.domain)
 
     if self.record and self.data:
       key = "\t".join([self.record, self.data])
@@ -215,6 +227,8 @@ class QueryOp(Task):
       if ttl is not None:
         pdns_be.hincrby(pdns_key, 'TXT\tQC', 1)
         return [(self.domain, self.record, ttl, self.data)]
+      elif wildcards:
+        return self.WildQuery(domain or self.domain)
       else:
         return []
 
@@ -238,8 +252,13 @@ class QueryOp(Task):
         record, data = entry.split("\t", 1)
         rv.append((self.domain, record, ddata[entry], data))
 
-    if rv: pdns_be.hincrby(pdns_key, 'TXT\tQC', 1)
-    return rv
+    if rv:
+      pdns_be.hincrby(pdns_key, 'TXT\tQC', 1)
+      return rv
+    elif wildcards:
+      return self.WildQuery(domain or self.domain)
+    else:
+      return []
 
   def Run(self):
     return self.Query()
@@ -296,12 +315,13 @@ class AddOp(WriteOp):
 class PdnsChatter(Task):
   """This object will chat with the pDNS server."""
 
-  def __init__(self, infile, outfile, redis_pdns):
+  def __init__(self, infile, outfile, redis_pdns, query_op=None):
     self.infile = infile
     self.outfile = outfile
     self.redis_pdns = redis_pdns
     self.local_ip = None
     self.magic_tests = {}
+    self.qop = query_op or QueryOp
     syslog.openlog((sys.argv[0] or 'pdns_redis.py').split('/')[-1],
                     syslog.LOG_PID, syslog.LOG_DAEMON)
 
@@ -385,9 +405,9 @@ class PdnsChatter(Task):
       if not domain:
         records = []
       elif rtype == 'ANY':
-        records = QueryOp(self.redis_pdns, domain).Query()
+        records = self.qop(self.redis_pdns, domain).Query(wildcards=True)
       else:
-        records = QueryOp(self.redis_pdns, domain, rtype).Query()
+        records = self.qop(self.redis_pdns, domain, rtype).Query(wildcards=True)
 
       for record in records:
         if record[1] in ('MX', 'SRV'):
