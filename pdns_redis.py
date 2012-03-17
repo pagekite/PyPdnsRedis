@@ -86,6 +86,7 @@ Examples:
 """
 
 import getopt
+import re
 import redis
 import socket
 import sys
@@ -398,6 +399,8 @@ class PdnsChatter(Task):
     except:
       pass
 
+  SRV_SPLIT = re.compile('[\\s,]+')
+
   def Lookup(self, query):
     (pdns_qtype, domain, qclass, rtype, _id, remote_ip, local_ip) = query
 
@@ -421,7 +424,7 @@ class PdnsChatter(Task):
 
       for record in records:
         if record[1] in ('MX', 'SRV'):
-          data = '\t'.join(record[3].split(' ', 1))
+          data = '\t'.join(self.SRV_SPLIT.split(record[3], 1))
           self.SendMxOrSrv(record[0], record[1], record[2], data)
         else:
           self.SendRecord(record)
