@@ -331,6 +331,7 @@ class PdnsChatter(Task):
     self.magic_tests = {}
     self.qop = query_op or QueryOp
     self.wildcards = wildcards
+    self.log_buffer = []
     syslog.openlog((sys.argv[0] or 'pdns_redis.py').split('/')[-1],
                     syslog.LOG_PID, syslog.LOG_DAEMON)
 
@@ -377,8 +378,12 @@ class PdnsChatter(Task):
     else:
       self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % record)
 
+  def FlushLogBuffer(self):
+    for message in self.log_buffer:
+      self.reply('LOG\t%s' % message)
+
   def SendLog(self, message):
-    self.reply('LOG\t%s' % message)
+    self.log_buffer.append(message)
 
   def EndReply(self):
     self.reply('END')
@@ -432,6 +437,7 @@ class PdnsChatter(Task):
       self.EndReply()
     else:
       self.SendLog("PowerDNS requested %s, we only do Q." % pdns_qtype)
+      self.FlushLogBuffer()
       self.reply('FAIL')
 
   def Run(self):
@@ -454,9 +460,11 @@ class PdnsChatter(Task):
         if len(query) == 7:
           self.Lookup(query)
         else:
+          self.FlushLogBuffer()
           self.reply("LOG\tPowerDNS sent bad request: %s" % query)
           self.reply("FAIL")
       except Exception, err:
+        self.FlushLogBuffer()
         self.reply("LOG\tInternal Error: %s" % err)
         self.reply("FAIL")
 
