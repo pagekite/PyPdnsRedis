@@ -379,13 +379,15 @@ class PdnsChatter(Task):
       self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % record)
 
   def FlushLogBuffer(self):
-    for message in self.log_buffer:
+    lb, self.log_buffer = self.log_buffer, []
+    for message in lb:
       self.reply('LOG\t%s' % message)
 
   def SendLog(self, message):
     self.log_buffer.append(message)
 
   def EndReply(self):
+    self.FlushLogBuffer()
     self.reply('END')
 
   def SetLocalIp(self, value):
