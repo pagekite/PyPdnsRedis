@@ -177,6 +177,14 @@ class MockRedis(object):
       del self.data[key][member]
       return True
     return False
+  def lpush(self, key, value):
+    if key not in self.data:
+      self.data[key] = []
+    self.data[key].append(value)
+    return True
+  def llen(self, key):
+    if key not in self.data: return 0
+    return len(self.data[key])
 
 
 class Error(Exception):
