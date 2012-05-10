@@ -185,6 +185,8 @@ class MockRedis(object):
   def llen(self, key):
     if key not in self.data: return 0
     return len(self.data[key])
+  def lpop(self, key):
+    return self.data[key].pop(0)
 
 
 class Error(Exception):
