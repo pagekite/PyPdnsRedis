@@ -586,7 +586,7 @@ class PdnsRedis(object):
     else:
       self.BE()
       for task in self.tasks:
-        print task.Run()
+        sys.stdout.write(task.Run().encode('utf-8')+'\n')
 
 
 if __name__ == '__main__':
