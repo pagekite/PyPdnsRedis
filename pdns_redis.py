@@ -278,7 +278,7 @@ class QueryOp(Task):
       return []
 
   def Run(self):
-    return self.Query()
+    return '%s' % (self.Query(), )
 
 
 class WriteOp(QueryOp):
