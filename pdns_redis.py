@@ -102,7 +102,7 @@ OPT_FLAGS = 'PwD:r:d:kqa:'
 OPT_ARGS = ['pdnsbe', 'domain', 'record', 'data', 'kill', 'delete', 'query',
             'add']
 
-VALID_RECORDS = ['A', 'NS', 'MX', 'CNAME', 'SOA', 'TXT']
+VALID_RECORDS = ['A', 'AAAA', 'NS', 'MX', 'CNAME', 'SOA', 'TXT']
 TTL_SUFFIXES = {
   'M': 60,
   'H': 60*60,
