@@ -443,7 +443,7 @@ class PdnsChatter(Task):
         if record[1] in ('MX', 'SRV'):
           data = '\t'.join(self.SRV_SPLIT.split(record[3], 1))
           self.SendMxOrSrv(record[0], record[1], record[2], data)
-        else:
+        elif record[1] != 'TXT' or record[3] != 'QC':
           self.SendRecord(record)
 
       self.EndReply()
