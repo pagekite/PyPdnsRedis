@@ -336,6 +336,7 @@ class PdnsChatter(Task):
                query_op=None, wildcards=False):
     self.infile = infile
     self.outfile = outfile
+    self.query_count = 0
     self.redis_pdns = redis_pdns
     self.local_ip = None
     self.magic_tests = {}
@@ -452,6 +453,9 @@ class PdnsChatter(Task):
       self.FlushLogBuffer()
       self.reply('FAIL')
 
+  def KeepRunning(self):
+    return True
+
   def Run(self):
     line1 = self.readline()
     if not line1 == "HELO\t2":
@@ -464,13 +468,16 @@ class PdnsChatter(Task):
     if not self.local_ip:
       self.SlowGetOwnIp()
 
-    while 1:
+    while self.KeepRunning():
       line = self.readline()
+      if line == '':
+        break
       try:
         query = line.split("\t")
         if DEBUG: syslog.syslog(syslog.LOG_DEBUG, 'Q: %s' % query)
         if len(query) == 7:
           self.Lookup(query)
+          self.query_count += 1
         else:
           self.FlushLogBuffer()
           self.reply("LOG\tPowerDNS sent bad request: %s" % query)
