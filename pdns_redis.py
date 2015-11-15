@@ -87,6 +87,7 @@ Examples:
 
 import getopt
 import re
+import random
 import redis
 import socket
 import sys
@@ -346,7 +347,6 @@ class PdnsChatter(Task):
     syslog.openlog((sys.argv[0] or 'pdns_redis.py').split('/')[-1],
                     syslog.LOG_PID, syslog.LOG_DAEMON)
 
-
   def reply(self, text):
     self.outfile.write(text)
     self.outfile.write("\n")
@@ -386,8 +386,11 @@ class PdnsChatter(Task):
         raise ValueError("Local IP address is unknown")
       self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (record[0], record[1],
                                                    record[2], self.local_ip))
+
     else:
-      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % record)
+      value = random.choice(record[3].split('|'))
+      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (record[0], record[1],
+                                                   record[2], value))
 
   def FlushLogBuffer(self):
     lb, self.log_buffer = self.log_buffer, []
