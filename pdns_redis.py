@@ -236,7 +236,7 @@ class QueryOp(Task):
     except ValueError:
       return []
 
-  def Query(self, domain=None, wildcards=False):
+  def _Query(self, domain=None, wildcards=False):
     pdns_be = self.BE()
     pdns_key = REDIS_PREFIX+(domain or self.domain)
 
@@ -278,6 +278,13 @@ class QueryOp(Task):
       return self.WildQuery(domain or self.domain)
     else:
       return []
+
+  def Query(self, *args, **kwargs):
+    try:
+      return self._Query(*args, **kwargs)
+    except redis.RedisError:
+      self.redis_pdns.Disconnect()
+      raise
 
   def Run(self):
     return '%s' % (self.Query(), )
@@ -500,11 +507,15 @@ class PdnsChatter(Task):
         if len(query) == 7:
           self.Lookup(query)
           self.query_count += 1
+        elif len(query) == 2 and query[0] == 'AXFR':
+          # Just fail silently on this one
+          self.reply("FAIL")
         else:
           self.FlushLogBuffer()
           self.reply("LOG\tPowerDNS sent bad request: %s" % query)
           self.reply("FAIL")
       except Exception, err:
+        self.redis_pdns.Disconnect()
         self.FlushLogBuffer()
         self.reply("LOG\tInternal Error: %s" % err)
         self.reply("FAIL")
@@ -585,29 +596,49 @@ class PdnsRedis(object):
 
     return self
 
+  def Disconnect(self):
+    self.be = self.wbe = None
+
   def BE(self):
-    if not self.be:
-      if self.redis_host == 'mock':
-        self.be = MockRedis()
-      else:
-        self.be = redis.Redis(host=self.redis_host,
-                              port=int(self.redis_port),
-                              password=self.redis_pass)
-      self.be.ping()
+    errors = 0
+    while not self.be:
+      try:
+        if self.redis_host == 'mock':
+          self.be = MockRedis()
+        else:
+          self.be = redis.Redis(host=self.redis_host,
+                                port=int(self.redis_port),
+                                password=self.redis_pass)
+        self.be.ping()
+      except redis.RedisError:
+        self.be = None
+        errors += 1
+        if errors > 24:
+          raise
+        else:
+          time.sleep(5)
     return self.be
 
   def WBE(self):
     if not self.redis_write_host: return self.BE()
-    if not self.wbe:
-      if self.redis_write_host == 'mock':
-        self.wbe = MockRedis()
-      else:
-        self.wbe = redis.Redis(host=self.redis_write_host,
-                               port=int(self.redis_write_port),
-                               password=self.redis_pass)
-      self.wbe.ping()
+    errors = 0
+    while not self.wbe:
+      try:
+        if self.redis_write_host == 'mock':
+          self.wbe = MockRedis()
+        else:
+          self.wbe = redis.Redis(host=self.redis_write_host,
+                                 port=int(self.redis_write_port),
+                                 password=self.redis_pass)
+        self.wbe.ping()
+      except redis.RedisError:
+        self.wbe = None
+        errors += 1
+        if errors > 24:
+          raise
+        else:
+          time.sleep(5)
     return self.wbe
-
 
   def RunTasks(self):
     if not self.tasks:
