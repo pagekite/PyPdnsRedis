@@ -384,7 +384,14 @@ class PdnsChatter(Task):
     if not result.get('ok', False):
       raise ValueError('Failed self-test %s != %s' % (want, url))
 
-  def SendRecord(self, record, remote_ip):
+  def ResponseFilter(self, name, rt, ttl, val):
+    return name, rt, ttl, val
+
+  def SendRecord(self, record, remote_ip=None):
+    if not remote_ip:
+      remote_ip = '127.%d.%d.1' % (random.randint(1, 255),
+                                   random.randint(1, 255))
+
     if record[3].startswith(MAGIC_SELF_IP):
       if ':' in record[3]:
         magic, test_want, test_url = record[3].split(':', 2)
@@ -392,31 +399,31 @@ class PdnsChatter(Task):
 
       if not self.local_ip:
         raise ValueError("Local IP address is unknown")
-      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (record[0], record[1],
-                                                   record[2], self.local_ip))
+      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % self.ResponseFilter(
+        record[0], record[1], record[2], self.local_ip))
 
     elif record[1] not in ('A', 'AAAA'):
-      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (record[0], record[1],
-                                                   record[2], record[3]))
+      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % self.ResponseFilter(
+        record[0], record[1], record[2], record[3]))
 
-    elif '/' in record[3]:
+    elif remote_ip and '/' in record[3]:
       # The goal of this, is to hash different clients to different IPs,
       # and rotate through the available set at 1 rotation-per-day, but
       # avoid rotating all the clients at the same time.
       values = record[3].split('/')
-      o = ((time.time() +
-            # Hash the first 3 octets of the IP to 5 hex digits; this
-            # gives us 0-12 days of offset to shift the time by.
-            int(hashlib.md5(remote_ip.rsplit('.', 1)[0]).hexdigest()[:5], 16)
-            ) // (24 * 3600)
-           ) % len(values)
-      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (record[0], record[1],
-                                                   record[2], values[o]))
+      o = int((time.time() +
+               # Hash the first 3 octets of the IP to 5 hex digits; this
+               # gives us 0-12 days of offset to shift the time by.
+               int(hashlib.md5(remote_ip.rsplit('.', 1)[0]).hexdigest()[:5], 16)
+               ) // (24 * 3600)
+              ) % len(values)
+      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % self.ResponseFilter(
+        record[0], record[1], record[2], values[o]))
 
     else:
       value = random.choice(record[3].split('|'))
-      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (record[0], record[1],
-                                                   record[2], value))
+      self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % self.ResponseFilter(
+        record[0], record[1], record[2], value))
 
   def FlushLogBuffer(self):
     lb, self.log_buffer = self.log_buffer, []
