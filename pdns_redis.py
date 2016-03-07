@@ -573,10 +573,6 @@ class PdnsRedis(object):
       if opt in ('-A', '--auth'):
         self.redis_pass = self.GetPass(arg)
 
-      if opt in ('-z', '--reset'):
-        self.q_record, self.q_data = None, None
-        self.tasks = []
-
     return opts, args
 
   def ParseArgs(self, argv):
@@ -586,6 +582,10 @@ class PdnsRedis(object):
       if opt in ('-D', '--domain'): self.q_domain = arg
       if opt in ('-r', '--record'): self.q_record = arg
       if opt in ('-d', '--data'): self.q_data = arg
+
+      if opt in ('-z', '--reset'):
+        self.q_record, self.q_data = None, None
+        self.tasks = []
 
       if opt in ('-q', '--query'):
         self.tasks.append(QueryOp(self,
