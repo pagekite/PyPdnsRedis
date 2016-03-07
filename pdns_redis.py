@@ -580,7 +580,6 @@ class PdnsRedis(object):
 
       if opt in ('-z', '--reset'):
         self.q_record, self.q_data = None, None
-        self.tasks = []
 
       if opt in ('-q', '--query'):
         self.tasks.append(QueryOp(self,
