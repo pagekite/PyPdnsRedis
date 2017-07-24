@@ -396,7 +396,7 @@ class PdnsChatter(Task):
     if record[3].startswith(MAGIC_SELF_IP):
       if ':' in record[3]:
         magic, test_want, test_url = record[3].split(':', 2)
-        self.MagicTest(want, test_url)
+        self.MagicTest(test_want, test_url)
 
       if not self.local_ip:
         raise ValueError("Local IP address is unknown")
