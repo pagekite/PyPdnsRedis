@@ -25,8 +25,8 @@ This program implements a PowerDNS pipe-backend for looking up domain info in a
 Redis database.  It also includes basic CLI functionality for querying, setting
 and deleting DNS records in Redis.
 
-Usage: pdns-redis.py [-R <host:port>] [-A <password-file>] [-P]
-       pdns-redis.py [-R <host:port>] [-A <password-file>]
+Usage: pdns-redis.py [-R <host:port>] [-i <db-id>] [-A <password-file>] [-P]
+       pdns-redis.py [-R <host:port>] [-i <db-id>] [-A <password-file>]
                      [-D <domain>] [-r <type>] [-d <data>] [-k] [-q] [-a <ttl>]
 
 Flags:
