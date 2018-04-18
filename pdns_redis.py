@@ -25,14 +25,15 @@ This program implements a PowerDNS pipe-backend for looking up domain info in a
 Redis database.  It also includes basic CLI functionality for querying, setting
 and deleting DNS records in Redis.
 
-Usage: pdns-redis.py [-R <host:port>] [-A <password-file>] [-P]
-       pdns-redis.py [-R <host:port>] [-A <password-file>]
+Usage: pdns-redis.py [-R <host:port>] [-i <db-id>] [-A <password-file>] [-P]
+       pdns-redis.py [-R <host:port>] [-i <db-id>] [-A <password-file>]
                      [-D <domain>] [-r <type>] [-d <data>] [-k] [-q] [-a <ttl>]
 
 Flags:
 
   -R <host:port>     Set the Redis back-end.
   -W <host:port>     Set the Redis back-end for writes.
+  -i <db-id>         Set the Redis DB ID (defaults to 0)
   -A <password-file> Read a Redis password from the named file.
   -P                 Run as a PowerDNS pipe-backend.
   -w                 Enable wild-card lookups in PowerDNS pipe-backend.
@@ -395,7 +396,7 @@ class PdnsChatter(Task):
     if record[3].startswith(MAGIC_SELF_IP):
       if ':' in record[3]:
         magic, test_want, test_url = record[3].split(':', 2)
-        self.MagicTest(want, test_url)
+        self.MagicTest(test_want, test_url)
 
       if not self.local_ip:
         raise ValueError("Local IP address is unknown")
@@ -534,6 +535,7 @@ class PdnsRedis(object):
   def __init__(self):
     self.redis_host = None
     self.redis_port = None
+    self.redis_db = 0
     self.redis_pass = None
     self.redis_write_host = None
     self.redis_write_port = None
@@ -564,6 +566,9 @@ class PdnsRedis(object):
 
       if opt in ('-W', '--redis_write'):
         self.redis_write_host, self.redis_write_port = arg.split(':')
+
+      if opt in ('-i', '--redis_db'):
+        self.redis_db = arg
 
       if opt in ('-A', '--auth'):
         self.redis_pass = self.GetPass(arg)
@@ -615,6 +620,7 @@ class PdnsRedis(object):
         else:
           self.be = redis.Redis(host=self.redis_host,
                                 port=int(self.redis_port),
+                                db=int(self.redis_db),
                                 password=self.redis_pass)
         self.be.ping()
       except redis.RedisError:
@@ -636,6 +642,7 @@ class PdnsRedis(object):
         else:
           self.wbe = redis.Redis(host=self.redis_write_host,
                                  port=int(self.redis_write_port),
+                                 db=int(self.redis_db),
                                  password=self.redis_pass)
         self.wbe.ping()
       except redis.RedisError:
