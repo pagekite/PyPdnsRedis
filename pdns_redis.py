@@ -483,6 +483,7 @@ class PdnsChatter(Task):
             data = '\t'.join(self.SRV_SPLIT.split(record[3], 1))
             self.SendMxOrSrv(record[0], record[1], record[2], data)
           except:
+            self.SendLog("Invalid MX/SRV: %s" % (record,))
             self.reply('FAIL')
         elif record[1] != 'TXT' or record[3] != 'QC':
           self.SendRecord(record, remote_ip)
@@ -520,7 +521,7 @@ class PdnsChatter(Task):
           self.query_count += 1
         elif len(query) == 2 and query[0] == 'AXFR':
           # Just fail silently on this one
-          self.reply("FAIL")
+          self.reply("END")
         else:
           self.FlushLogBuffer()
           self.reply("LOG\tPowerDNS sent bad request: %s" % query)
