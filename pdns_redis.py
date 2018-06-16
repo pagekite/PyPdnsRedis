@@ -579,8 +579,11 @@ class PdnsRedis(object):
 
     return opts, args
 
-  def ParseArgs(self, argv):
+  def ParseArgs(self, argv, reset_task_list=True):
     opts, args = self.ParseWithCommonArgs(argv, OPT_FLAGS, OPT_ARGS)
+
+    if reset_task_list:
+      self.tasks = []
 
     for opt, arg in opts:
       if opt in ('-D', '--domain'): self.q_domain = arg
