@@ -660,13 +660,15 @@ class PdnsRedis(object):
           time.sleep(5)
     return self.wbe
 
-  def RunTasks(self, report=sys.stdout.write):
+  def RunTasks(self, report=sys.stdout.write, reset_task_list=True):
     if not self.tasks:
       raise ArgumentError('Nothing to do!')
     else:
       self.BE()
       for task in self.tasks:
         report(task.Run().encode('utf-8')+'\n')
+      if reset_task_list:
+        self.tasks = []
 
 
 if __name__ == '__main__':
