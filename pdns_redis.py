@@ -31,8 +31,8 @@ Usage: pdns-redis.py [-R <host:port>] [-i <db-id>] [-A <password-file>] [-P]
 
 Flags:
 
-  -R <host:port>     Set the Redis back-end.
-  -W <host:port>     Set the Redis back-end for writes.
+  -R <host:port>     Set the Redis back-end (read only).
+  -W <host:port>     Set the Redis back-end for writes (query count updates and record alterations).
   -i <db-id>         Set the Redis DB ID (defaults to 0)
   -A <password-file> Read a Redis password from the named file.
   -P                 Run as a PowerDNS pipe-backend.
@@ -221,9 +221,15 @@ class QueryOp(Task):
     self.domain = domain and domain.lower() or None
     self.record = record and record.upper() or None
     self.data = data
+  
+  def _readonly(self):
+    return self.redis_pdns.redis_write_host is None
 
   def BE(self):
     return self.redis_pdns.BE()
+  
+  def WBE(self):
+    return self.redis_pdns.WBE()
 
   def DSplit(self, domain, count=1024):
     return domain.split('.', count)
@@ -239,13 +245,15 @@ class QueryOp(Task):
 
   def _Query(self, domain=None, wildcards=False):
     pdns_be = self.BE()
+    pdns_wbe = self.WBE() if not self._readonly() else None
     pdns_key = REDIS_PREFIX+(domain or self.domain)
 
     if self.record and self.data:
       key = "\t".join([self.record, self.data])
       ttl = pdns_be.hget(pdns_key, key)
       if ttl is not None:
-        pdns_be.hincrby(pdns_key, 'TXT\tQC', 1)
+        if pdns_wbe is not None:
+          pdns_wbe.hincrby(pdns_key, 'TXT\tQC', 1)
         return [(self.domain, self.record, ttl, self.data)]
       elif wildcards:
         return self.WildQuery(domain or self.domain)
@@ -273,7 +281,8 @@ class QueryOp(Task):
         rv.append((self.domain, record, ddata[entry], data))
 
     if rv:
-      pdns_be.hincrby(pdns_key, 'TXT\tQC', 1)
+      if pdns_wbe is not None:
+        pdns_wbe.hincrby(pdns_key, 'TXT\tQC', 1)
       return rv
     elif wildcards:
       return self.WildQuery(domain or self.domain)
@@ -526,7 +535,7 @@ class PdnsChatter(Task):
           self.FlushLogBuffer()
           self.reply("LOG\tPowerDNS sent bad request: %s" % query)
           self.reply("FAIL")
-      except Exception, err:
+      except Exception as err:
         self.redis_pdns.Disconnect()
         self.FlushLogBuffer()
         self.reply("LOG\tInternal Error: %s" % err)
@@ -674,8 +683,8 @@ class PdnsRedis(object):
 if __name__ == '__main__':
   try:
     pr = PdnsRedis().ParseArgs(sys.argv[1:]).RunTasks()
-  except ArgumentError, e:
-    print DOC
-    print 'Error: %s' % e
+  except ArgumentError as e:
+    print(DOC)
+    print('Error: %s' % e)
     sys.exit(1)
 
