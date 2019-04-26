@@ -42,6 +42,7 @@ Flags:
   -d <data>          Data we are looking for or adding.
   -z                 Reset record and data.
   -q                 Query.
+  -Q                 Fancy Query (resolves wildcards and more).
   -k                 Kill (delete).
   -a <ttl>           Add using a given TTL (requires -r and -d).  The TTL
                      is in seconds, but may use a suffix of M, H, D or W
@@ -115,7 +116,7 @@ OPT_COMMON_FLAGS = 'A:R:W:z'
 OPT_COMMON_ARGS = ['auth=', 'redis=', 'redis_write=', 'reset']
 OPT_FLAGS = 'PwD:r:d:kqa:'
 OPT_ARGS = ['pdnsbe', 'domain', 'record', 'data', 'kill', 'delete', 'query',
-            'add']
+            'add', 'fancyquery']
 
 VALID_RECORDS = ['A', 'AAAA', 'NS', 'MX', 'CNAME', 'SOA', 'TXT']
 TTL_SUFFIXES = {
@@ -220,6 +221,7 @@ class Task(object):
 
 class QueryOp(Task):
   """This object will query Redis for a given record."""
+  RESOLVE_WILDCARDS = False
 
   def __init__(self, redis_pdns, domain, record=None, data=None):
     if not redis_pdns:
@@ -249,9 +251,12 @@ class QueryOp(Task):
     except ValueError:
       return []
 
-  def _Query(self, domain=None, wildcards=False):
+  def _Query(self, domain=None, wildcards=None):
     pdns_be = self.BE()
     pdns_key = REDIS_PREFIX+(domain or self.domain)
+
+    if wildcards is None:
+      wildcards = self.RESOLVE_WILDCARDS
 
     if self.record and self.data:
       key = "\t".join([self.record, self.data])
@@ -351,6 +356,10 @@ class AddOp(WriteOp):
     return 'Added %s record to %s.' % (self.record, self.domain)
 
 
+class FancyQueryOp(QueryOp):
+  RESOLVE_WILDCARDS = True
+
+
 class PdnsChatter(Task):
   """This object will chat with the pDNS server."""
 
@@ -362,7 +371,7 @@ class PdnsChatter(Task):
     self.redis_pdns = redis_pdns
     self.local_ip = None
     self.magic_tests = {}
-    self.qop = query_op or QueryOp
+    self.qop = query_op or FancyQueryOp
     self.wildcards = wildcards
     self.log_buffer = []
     syslog.openlog((sys.argv[0] or 'pdns_redis.py').split('/')[-1],
@@ -608,6 +617,10 @@ class PdnsRedis(object):
       if opt in ('-q', '--query'):
         self.tasks.append(QueryOp(self,
                                   self.q_domain, self.q_record, self.q_data))
+
+      if opt in ('-Q', '--fancyquery'):
+        self.tasks.append(FancyQueryOp(self,
+                                       self.q_domain, self.q_record, self.q_data))
 
       if opt in ('-k', '--delete', '--kill'):
         self.tasks.append(DeleteOp(self,
