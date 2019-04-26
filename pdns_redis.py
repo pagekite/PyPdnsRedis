@@ -364,12 +364,12 @@ class PdnsChatter(Task):
   """This object will chat with the pDNS server."""
 
   def __init__(self, infile, outfile, redis_pdns,
-               query_op=None, wildcards=False):
+               query_op=None, wildcards=False, local_ip=None):
     self.infile = infile
     self.outfile = outfile
     self.query_count = 0
     self.redis_pdns = redis_pdns
-    self.local_ip = None
+    self.local_ip = local_ip
     self.magic_tests = {}
     self.qop = query_op or FancyQueryOp
     self.wildcards = wildcards

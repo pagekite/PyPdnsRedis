@@ -1,0 +1,85 @@
+#!/bin/bash
+#
+# This is a magic test script. If run using bash, it will run the tests using
+# whatever Python interpretors are found in /usr/bin/ and /usr/local/bin/.
+#
+# Or, you can manually run it like so: python3 pdns_redis_test
+#
+MAGIC="""\
+"
+for interp in /usr/bin/python?.? /usr/local/bin/python?.?; do
+    if [ -e "$interp" ]; then
+        echo "==== Testing with $interp ===="
+        $interp $0 || exit 1
+    fi
+done
+echo "==== All passed! ===="
+exit 0
+"""
+import pdns_redis
+import sys
+try:
+    from cStringIO import StringIO
+except:
+    from io import StringIO
+
+
+def assertEquals(v1, v2, label=None):
+    if (v1 == v2):
+        print('OK: %s' % (label or v1))
+    else:
+        print('FAILED: %s != %s' % (v1, v2))
+        assert(v1 == v2)
+
+
+pdns_redis.DEBUG = True
+pr = pdns_redis.PdnsRedis().ParseArgs(['-R', 'mock:0'])
+
+# The basics...
+assertEquals(
+    pdns_redis.AddOp(pr, 'example.com', 'A', 'self', '5M').Run(),
+    'Added A record to example.com.')
+assertEquals(
+    pdns_redis.QueryOp(pr, 'example.com').Query(),
+    [('example.com', 'A', '300', 'self')])
+
+# Test the wildcard mechanism. The QueryOp should return nothing, but
+# the FancyQueryOp should resolve the domain using the wildcard.
+assertEquals(
+    pdns_redis.AddOp(pr, '*.example.com', 'A', '1.2.3.4', '5M').Run(),
+    'Added A record to *.example.com.')
+assertEquals(
+    pdns_redis.QueryOp(pr, 'foo.example.com', 'A').Query(),
+    [], label="empty QueryOp response")
+assertEquals(
+    pdns_redis.FancyQueryOp(pr, 'foo.example.com', 'A').Query(),
+    [('foo.example.com', 'A', '300', '1.2.3.4')])
+
+
+# Test the PDNS chat server
+chat_test_input = """\
+HELO\t2
+BOGON
+AXFR\texample.com
+Q\tbad-example.com\tIN\tANY\t1234\t9.9.9.9\t1.2.3.4
+Q\tfoo.example.com\tIN\tANY\t1234\t9.9.9.9\t1.2.3.4
+
+"""
+expected_chat_output = """\
+OK\tpdns-redis.py, by Bjarni R. Einarsson
+LOG\tPowerDNS sent bad request: ['BOGON']
+FAIL
+END
+END
+DATA\tfoo.example.com\tIN\tA\t300\t-1\t1.2.3.4
+END
+"""
+chat_test_output = StringIO()
+pdns_redis.PdnsChatter(
+    StringIO(chat_test_input), chat_test_output, pr,
+    wildcards=True).Run()
+assertEquals(chat_test_output.getvalue(), expected_chat_output,
+    label="PdnsChatter behaves correctly")
+
+
+# vim: syntax=python ts=4 expandtab
