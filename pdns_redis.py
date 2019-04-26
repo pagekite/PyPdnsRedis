@@ -90,12 +90,24 @@ import getopt
 import hashlib
 import random
 import re
-import redis
 import socket
 import sys
 import syslog
 import time
 import urllib
+
+try:
+    # python 2.x
+    foo = unicode()
+except:
+    # python 3.x
+    unicode = str
+
+
+# These get redefined if we actually import redis
+redis = None
+redis_error = IOError
+
 
 DEBUG = False
 
@@ -283,7 +295,7 @@ class QueryOp(Task):
   def Query(self, *args, **kwargs):
     try:
       return self._Query(*args, **kwargs)
-    except redis.RedisError:
+    except redis_error:
       self.redis_pdns.Disconnect()
       raise
 
@@ -526,7 +538,7 @@ class PdnsChatter(Task):
           self.FlushLogBuffer()
           self.reply("LOG\tPowerDNS sent bad request: %s" % query)
           self.reply("FAIL")
-      except Exception, err:
+      except Exception as err:
         self.redis_pdns.Disconnect()
         self.FlushLogBuffer()
         self.reply("LOG\tInternal Error: %s" % err)
@@ -624,12 +636,15 @@ class PdnsRedis(object):
         if self.redis_host == 'mock':
           self.be = MockRedis()
         else:
+          import redis
+          global redis_error
+          redis_error = redis.RedisError
           self.be = redis.Redis(host=self.redis_host,
                                 port=int(self.redis_port),
                                 db=int(self.redis_db),
                                 password=self.redis_pass)
         self.be.ping()
-      except redis.RedisError:
+      except redis_error:
         self.be = None
         errors += 1
         if errors > 24:
@@ -646,12 +661,15 @@ class PdnsRedis(object):
         if self.redis_write_host == 'mock':
           self.wbe = MockRedis()
         else:
+          import redis
+          global redis_error
+          redis_error = redis.RedisError
           self.wbe = redis.Redis(host=self.redis_write_host,
                                  port=int(self.redis_write_port),
                                  db=int(self.redis_db),
                                  password=self.redis_pass)
         self.wbe.ping()
-      except redis.RedisError:
+      except redis_error:
         self.wbe = None
         errors += 1
         if errors > 24:
@@ -674,8 +692,8 @@ class PdnsRedis(object):
 if __name__ == '__main__':
   try:
     pr = PdnsRedis().ParseArgs(sys.argv[1:]).RunTasks()
-  except ArgumentError, e:
-    print DOC
-    print 'Error: %s' % e
+  except ArgumentError as e:
+    print(DOC)
+    print('Error: %s' % e)
     sys.exit(1)
 
