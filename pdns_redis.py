@@ -95,7 +95,20 @@ import socket
 import sys
 import syslog
 import time
-import urllib.request
+
+try:
+  # python 2.x
+  from urllib import urlopen
+except ImportError:
+  # python 3.x
+  from urllib.request import urlopen 
+
+try:
+    # python 2.x
+    foo = unicode()
+except:
+    # python 3.x
+    unicode = str
 
 
 # These get redefined if we actually import redis
@@ -133,7 +146,10 @@ class MockRedis(object):
     if key in self.data: return self.data[key]
     return None
   def encode(self, val):
-    # Might not be necessary but leaving this here since the following fns are setting a str right now
+    if isinstance(val, str):
+      return val
+    if isinstance(val, unicode):
+      return val.encode('utf-8')
     return str(val)
   def set(self, key, val):
     self.data[key] = self.encode(val)
@@ -390,7 +406,7 @@ class PdnsChatter(Task):
     if result.get('time', 0) < (now - MAGIC_TEST_VALIDITY):
       result['time'] = now
       try:
-        tdata = ''.join(urllib.request.urlopen(url).readlines())
+        tdata = ''.join(urlopen(url).readlines())
         result['ok'] = tdata.startswith(want)
       except:
         result['ok'] = False
@@ -690,7 +706,12 @@ class PdnsRedis(object):
     else:
       self.BE()
       for task in self.tasks:
-        report(task.Run()+'\n')
+        try:
+          # python 2.x
+          report(task.Run().encode('utf-8')+'\n')
+        except TypeError:
+          # python 3.x
+          report(task.Run()+'\n')
       if reset_task_list:
         self.tasks = []
 
