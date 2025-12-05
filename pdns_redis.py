@@ -95,14 +95,7 @@ import socket
 import sys
 import syslog
 import time
-import urllib
-
-try:
-    # python 2.x
-    foo = unicode()
-except:
-    # python 3.x
-    unicode = str
+import urllib.request
 
 
 # These get redefined if we actually import redis
@@ -140,10 +133,7 @@ class MockRedis(object):
     if key in self.data: return self.data[key]
     return None
   def encode(self, val):
-    if isinstance(val, str):
-      return val
-    if isinstance(val, unicode):
-      return val.encode('utf-8')
+    # Might not be necessary but leaving this here since the following fns are setting a str right now
     return str(val)
   def set(self, key, val):
     self.data[key] = self.encode(val)
@@ -180,6 +170,9 @@ class MockRedis(object):
   def hdel(self, key, hkey):
     if key in self.data and hkey in self.data[key]: del(self.data[key][hkey])
     return True
+  def hkeys(self, key):
+    if key in self.data: return self.data[key].keys()
+    return {}
   def hset(self, key, hkey, val):
     if key not in self.data: self.data[key] = {}
     self.data[key][hkey] = self.encode(val)
@@ -397,7 +390,7 @@ class PdnsChatter(Task):
     if result.get('time', 0) < (now - MAGIC_TEST_VALIDITY):
       result['time'] = now
       try:
-        tdata = ''.join(urllib.urlopen(url).readlines())
+        tdata = ''.join(urllib.request.urlopen(url).readlines())
         result['ok'] = tdata.startswith(want)
       except:
         result['ok'] = False
@@ -697,7 +690,7 @@ class PdnsRedis(object):
     else:
       self.BE()
       for task in self.tasks:
-        report(task.Run().encode('utf-8')+'\n')
+        report(task.Run()+'\n')
       if reset_task_list:
         self.tasks = []
 
