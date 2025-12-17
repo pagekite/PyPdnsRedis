@@ -484,7 +484,7 @@ class PdnsChatter(Task):
     except:
       pass
 
-  SRV_SPLIT = re.compile('[\\s,]+')
+  SRV_SPLIT = re.compile(r'[\s,]+')
 
   def Lookup(self, query):
     (pdns_qtype, domain, qclass, rtype, _id, remote_ip, local_ip) = query
