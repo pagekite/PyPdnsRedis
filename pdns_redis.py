@@ -110,9 +110,9 @@ except:
     # python 3.x
     unicode = str
 
+import redis
 
-# These get redefined if we actually import redis
-redis = None
+# This gets redefined if we use the redis backend rather than MockRedis
 redis_error = IOError
 
 
@@ -193,6 +193,8 @@ class MockRedis(object):
     if key not in self.data: self.data[key] = {}
     self.data[key][hkey] = self.encode(val)
     return True
+  def keys(self):
+    return self.data.keys()
   def sadd(self, key, member):
     if key not in self.data: self.data[key] = {}
     self.data[key][member] = 1
@@ -213,6 +215,75 @@ class MockRedis(object):
   def lpop(self, key):
     return self.data[key].pop(0)
 
+class UnicodeRedis(object):
+  def __init__(self, host, port, db, password):
+    self.redis = redis.Redis(host=host, port=port, db=db, password=password)
+
+  # Some redis functions can return a bytestring so try to decode to str
+  # fallback to regular return if for some reason it's not a bytestring ¯\_(ツ)_/¯
+  def decode(self, val):
+    try:
+      return val.decode('utf-8')
+    except AttributeError:
+      return val
+
+  def ping(self):
+    return self.redis.ping()
+
+  def get(self, key):
+    return self.decode(self.redis.get(key))
+
+  def set(self, key, val):
+    return self.redis.set(key, val)
+
+  def setnx(self, key, val):
+    return self.redis.setnx(key, val)
+
+  def incr(self, key):
+    return self.redis.incr(key)
+
+  def incrby(self, key, val):
+    return self.redis.incrby(key, val)
+
+  def delete(self, key):
+    return self.redis.delete(key)
+
+  def hget(self, key, hkey):
+    return self.decode(self.redis.hget(key, hkey))
+
+  def hincrby(self, key, hkey, val):
+    return self.redis.hincrby(key, hkey, val)
+
+  def hgetall(self, key):
+    dict_vals = self.redis.hgetall(key)
+    return {self.decode(k): self.decode(v) for k, v in dict_vals.items()}
+
+  def hdel(self, key, hkey):
+    return self.redis.hdel(key, hkey)
+
+  def hkeys(self, key):
+    return [self.decode(k) for k in self.redis.hkeys(key)]
+
+  def hset(self, key, hkey, val):
+    return self.redis.hset(key, hkey, val)
+
+  def keys(self, pattern='*'):
+    return [self.decode(k) for k in self.redis.keys(pattern)]
+
+  def sadd(self, key, member):
+    return self.redis.sadd(key, member)
+
+  def srem(self, key, member):
+    return self.redis.srem(key, member)
+
+  def lpush(self, key, value):
+    return self.redis.lpush(key, value)
+
+  def llen(self, key):
+    return self.redis.llen(key)
+
+  def lpop(self, key):
+    return self.decode(self.redis.lpop(key))
 
 class Error(Exception):
   pass
@@ -658,13 +729,12 @@ class PdnsRedis(object):
         if self.redis_host == 'mock':
           self.be = MockRedis()
         else:
-          import redis
           global redis_error
           redis_error = redis.RedisError
-          self.be = redis.Redis(host=self.redis_host,
-                                port=int(self.redis_port),
-                                db=int(self.redis_db),
-                                password=self.redis_pass)
+          self.be = UnicodeRedis(host=self.redis_host,
+                                 port=int(self.redis_port),
+                                 db=int(self.redis_db),
+                                 password=self.redis_pass)
         self.be.ping()
       except redis_error:
         self.be = None
@@ -686,10 +756,10 @@ class PdnsRedis(object):
           import redis
           global redis_error
           redis_error = redis.RedisError
-          self.wbe = redis.Redis(host=self.redis_write_host,
-                                 port=int(self.redis_write_port),
-                                 db=int(self.redis_db),
-                                 password=self.redis_pass)
+          self.wbe = UnicodeRedis(host=self.redis_write_host,
+                                  port=int(self.redis_write_port),
+                                  db=int(self.redis_db),
+                                  password=self.redis_pass)
         self.wbe.ping()
       except redis_error:
         self.wbe = None
