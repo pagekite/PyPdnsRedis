@@ -471,7 +471,7 @@ class PdnsChatter(Task):
     self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % (d1, d2, d3, d4))
 
   def MagicTest(self, want, url, now=None):
-    now = now or time.time()
+    now = int(now or time.time())
     result = self.magic_tests.get(url, {})
 
     if result.get('time', 0) < (now - MAGIC_TEST_VALIDITY):
