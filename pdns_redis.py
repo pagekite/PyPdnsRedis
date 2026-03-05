@@ -106,7 +106,7 @@ except ImportError:
 try:
     # python 2.x
     foo = unicode()
-except:
+except NameError:
     # python 3.x
     unicode = str
 
@@ -477,10 +477,16 @@ class PdnsChatter(Task):
     if result.get('time', 0) < (now - MAGIC_TEST_VALIDITY):
       result['time'] = now
       try:
-        tdata = ''.join(urlopen(url).readlines())
-        result['ok'] = tdata.startswith(want)
-      except:
-        result['ok'] = False
+        lines = urlopen(url).readlines()
+      except Exception: # some kind of network error, probably
+          result['ok'] = False
+      else:
+          try:
+              tdata = ''.join(lines)
+          except TypeError: # Python 3, readlines() returns bytes
+              tdata = b''.join(lines)
+              want = want.encode('utf-8')
+          result['ok'] = tdata.startswith(want)
 
     self.magic_tests[url] = result
     if not result.get('ok', False):
@@ -516,7 +522,9 @@ class PdnsChatter(Task):
       o = int((time.time() +
                # Hash the first 3 octets of the IP to 5 hex digits; this
                # gives us 0-12 days of offset to shift the time by.
-               int(hashlib.md5(remote_ip.rsplit('.', 1)[0]).hexdigest()[:5], 16)
+               # encode to bytes for python 3, unnecessary for python 2
+               # but still works
+               int(hashlib.md5(remote_ip.rsplit('.', 1)[0].encode('utf-8')).hexdigest()[:5], 16)
                ) // (24 * 3600)
               ) % len(values)
       self.reply('DATA\t%s\tIN\t%s\t%s\t-1\t%s' % self.ResponseFilter(
@@ -552,7 +560,7 @@ class PdnsChatter(Task):
       s.connect(target)
       self.SetLocalIp(s.getsockname()[0])
       s.close()
-    except:
+    except Exception:
       pass
 
   SRV_SPLIT = re.compile(r'[\s,]+')
@@ -565,7 +573,7 @@ class PdnsChatter(Task):
       if not self.local_ip:
         try:
           self.SetLocalIp(socket.getaddrinfo(socket.gethostname(), None)[0][4][0])
-        except:
+        except Exception:
           pass
 
     if pdns_qtype == 'Q':
@@ -583,7 +591,7 @@ class PdnsChatter(Task):
           try:
             data = '\t'.join(self.SRV_SPLIT.split(record[3], 1))
             self.SendMxOrSrv(record[0], record[1], record[2], data)
-          except:
+          except Exception:
             self.SendLog("Invalid MX/SRV: %s" % (record,))
             self.reply('FAIL')
         elif record[1] != 'TXT' or record[3] != 'QC':
@@ -653,11 +661,11 @@ class PdnsRedis(object):
     self.tasks = []
 
   def GetPass(self, filename):
-    f = open(filename)
-    for line in f.readlines():
-      if line.startswith('requirepass') or line.startswith('pass'):
-        rp, password = line.strip().split(' ', 1)
-        return password
+    with open(filename) as f:
+      for line in f.readlines():
+        if line.startswith('requirepass') or line.startswith('pass'):
+          rp, password = line.strip().split(' ', 1)
+          return password
     return None
 
   def ParseWithCommonArgs(self, argv, flaglist, arglist):
@@ -776,12 +784,13 @@ class PdnsRedis(object):
     else:
       self.BE()
       for task in self.tasks:
+        result = task.Run()
         try:
           # python 2.x
-          report(task.Run().encode('utf-8')+'\n')
+          report(result.encode('utf-8')+'\n')
         except TypeError:
           # python 3.x
-          report(task.Run()+'\n')
+          report(result+'\n')
       if reset_task_list:
         self.tasks = []
 
